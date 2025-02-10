@@ -32,6 +32,9 @@ target_sources(base
 target_sources(base
   PRIVATE
     src/cuda_test_compil.cu
+    src/TD1.cu
+    src/TD2.cu
+    src/TP2.cu
 )
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME}
