@@ -1,65 +1,104 @@
 
-#include "cuda_helper.hpp"
+#include "convolution.cpp"
 
 #include <cuda_runtime.h>
-#include <vector>
 
 namespace {
 
-__global__ void filtreNbPremiers( 
-                    int * inoutListeNombresAleatoires, const int nbNombresAleatoires,
-              const int * listeNombresPremiers,      const int nbNombresPremiers )
+__global__ void convolution_GPU( 
+            std::vector<char> image, const int width,
+            std::vector<char> mask, const int widthMask,
+            std::vector<char> output)
 {
-  extern __shared__ int listeNbresPremiersShrd[];
+  extern __shared__ int maskShared[];
   int indiceGlobal = threadIdx.x + blockIdx.x * blockDim.x;
 
-  if ( threadIdx.x < nbNombresPremiers )
+  if ( threadIdx.x < widthMask )
   {
-    listeNbresPremiersShrd[ threadIdx.x ] = listeNombresPremiers[ threadIdx.x ];
+    maskShared[ threadIdx.x ] = mask[ threadIdx.x ];
   }
 
   __syncthreads();
-  if ( indiceGlobal < nbNombresAleatoires )
-  {
-    int nombreAleatoire = inoutListeNombresAleatoires[ indiceGlobal ];
-    bool estNombrePremier = true;
+  if ( indiceGlobal < width )
+  
+    int maskRadius = widthMask / 2;
+    int paddedWidth = width + 2 * maskRadius;
 
-    int i = 0;
-    while ( estNombrePremier && i < nbNombresPremiers )
-    {
-      estNombrePremier = !(nombreAleatoire != listeNbresPremiersShrd[ i ] && (nombreAleatoire % listeNbresPremiersShrd[ i ] == 0));
-      ++i;
+    // Appliquer la somme pondérée des pixels suivant le masque
+    for (int y = 0; y < width; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int sum = 0;
+
+            for (int j = -maskRadius; j <= maskRadius; ++j) {
+                for (int i = -maskRadius; i <= maskRadius; ++i) {
+                    int imageIndex = (y + j + maskRadius) * paddedWidth + (x + i + maskRadius);
+                    int maskIndex = (j + maskRadius) * widthMask + (i + maskRadius);
+                
+                    sum += paddedImage[imageIndex] * maskShared[maskIndex];
+
+                    std::cout << (int)sum << " ";
+                    std::cout << "\n";
+                }
+            }
+            // Attention ne pas dépasser 255 qui ai le niveau de gris le plus élevé.
+            output[y * width + x] = static_cast<char>(std::max(0, std::min(255, sum)));
+        }
     }
-    if ( !estNombrePremier )
-    {
-      inoutListeNombresAleatoires[ indiceGlobal ] = -1;
-    }
-  }
+    return output;
 }
 
 } // namespace
 
+
+
+// Implémentation d'une convolution d'une image avec un masque.
 std::vector<char> convolution(
     const std::vector<char> & image, const int width,
     const std::vector<char> & mask, const int widthMask)
-
 {
-//   dim3 dimBloc( 512 );
-//   dim3 dimGrille( randomNumbers.size() / dimBloc.x + ( randomNumbers.size() % dimBloc.x != 0 ) );
-// 	int tailleShared = primeNumbers.size() * sizeof( int );
+    dim3 dimBloc( 512 );
+    dim3 dimGrille( image.size() / dimBloc.x + ( image.size() % dimBloc.x != 0 ) );
+	int tailleShared = mask.size() * sizeof( int );
 
-//   {
-//     MemoryCopier randomNumberCopier( randomNumbers.data(), randomNumbers.size(), CopyType::BothSide );
-//     MemoryCopier primeNumbersCopier( primeNumbers.data(), primeNumbers.size(), CopyType::CpuToGpuOnly);
-//     filtreNbPremiers<<< dimGrille, dimBloc, tailleShared >>>(
-//       randomNumberCopier.gpuData(),
-//       randomNumbers.size(),
-//       primeNumbersCopier.gpuData(),   
-//       primeNumbers.size()
-//     );
-//     exitOnError( cudaGetLastError() );
-//   }
-//   randomNumbers.erase(std::remove(randomNumbers.begin(), randomNumbers.end(), -1), randomNumbers.end());
-    std::vector<char> out;
-  return out;
+    std::vector<char> output;
+
+    // Play on CPU
+    //output = convolution_CPU(image, width, mask, widthMask);
+
+
+    int maskRadius = widthMask / 2;
+    int paddedWidth = width + 2 * maskRadius;
+
+    std::vector<char> paddedImage(paddedWidth * paddedWidth, 0);
+
+    // Copier l'image originale dans l'image paddée
+    for (int y = 0; y < width; ++y) {
+        for (int x = 0; x < width; ++x) {
+            paddedImage[(y + maskRadius) * paddedWidth + (x + maskRadius)] = image[y * width + x];
+        }
+    }
+
+    std::vector<char> output(image.size(), 0);
+
+    std::vector<char> paddedImage_GPU;
+    std::vector<char> mask_GPU;
+    std::vector<char> output_GPU;
+
+
+    cudaMalloc(&paddedImage_GPU, paddedWidth * sizeof(char));
+    cudaMalloc(&mask_GPU, widthMask * sizeof(char));
+    cudaMalloc(&output_GPU, width * sizeof(char));
+
+    // Copie vers GPU
+    cudaMemcpy(paddedImage, paddedImage, paddedWidth * sizeof(char), cudaMemcpyHostToDevice);
+    cudaMemcpy(mask, mask, widthMask * sizeof(char), cudaMemcpyHostToDevice);
+
+
+    // Appel kernel
+    convolution_GPU<<< dimGrille, dimBloc >>>(paddedImage_GPU, paddedWidth, mask_GPU, widthMask, output_GPU);
+
+    // Copie vers CPU
+    cudaMemcpy(output_GPU, output, width * sizeof( char ), cudaMemcpyDeviceToHost );
+
+    return output;
 }
