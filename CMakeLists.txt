@@ -28,6 +28,7 @@ add_library(base)
 target_sources(base
   PRIVATE
     src/cpp_test_compil.cpp
+    src/cuda_helper.cpp
 )
 target_sources(base
   PRIVATE

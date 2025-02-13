@@ -1,4 +1,12 @@
 
+# TP Filtrer une image
+
+Les fichiers du TP sont :
+- convolution.cpp/hpp : Convolution d'une image avec un masque exécutée sur CPU.
+- cuda_helper.cpp/hpp : Les même que dans votre correction. Permet la gestion de l'allocation et copy pour fonction GPU.
+- TP_note.cu/hpp : Une fonction convolution qui permet d'initialiser les variables et lancer la fonction convolution_GPU exécutée sur GPU.
+- main.cpp : Convolution d'une image avec un masque.
+
 # Test CUDA Compilation
 
 ## On Windows

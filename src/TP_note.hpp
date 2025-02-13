@@ -3,6 +3,6 @@
 
 #include <vector>
 
-std::vector<char> convolution(
-    const std::vector<char> & image, const int width,
+std::vector<unsigned char> convolution(
+    const std::vector<unsigned char> & image, const int width,
     const std::vector<char> & mask, const int widthMask);
